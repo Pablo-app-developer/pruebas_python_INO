@@ -29,9 +29,13 @@
   #screen .err{color:#ff6b6b}
   #tin{background:transparent;border:0;outline:0;color:#e6e6e6;font:inherit;caret-color:#4ec24e;width:60%;padding:0}
   small{color:#666}
+  #start{position:fixed;inset:0;background:#f5f6f8;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px}
+  #start button{padding:14px 34px;font-size:18px;border:0;border-radius:8px;background:#16a34a;color:#fff;cursor:pointer}
+  #start[hidden]{display:none}
 </style>
 </head>
 <body>
+<div id="start" hidden><h2 id="sname"></h2><p id="sinfo"></p><button id="startbtn">Empezar prueba</button></div>
 <header><span id="who">Cargando…</span><span id="timer"></span></header>
 <main>
   <nav id="nav"></nav>
@@ -57,6 +61,7 @@ const PROMPT = 'candidato@prueba:~$ ';
 let T, cur = 0, py, buf = [], codes = {}, lastSnap = '', typed = 0, endAt = 0, inputs = [];
 
 function ev(type, data) {
+  if (!T || !T.questions) return;
   buf.push({q: T ? T.questions[cur].id : null, type, data: data || {}, t: Date.now() / 1000});
 }
 function flush() {
@@ -67,7 +72,7 @@ function flush() {
 }
 setInterval(flush, 3000);
 setInterval(() => {
-  if (!T || ta.value === lastSnap) return;
+  if (!T || !T.questions || ta.value === lastSnap) return;
   lastSnap = ta.value; ev('snap', {code: lastSnap, typed});
 }, 5000);
 
@@ -228,9 +233,7 @@ window.addEventListener('focus', () => ev('focus'));
 document.addEventListener('visibilitychange', () => ev(document.hidden ? 'hidden' : 'visible'));
 window.addEventListener('beforeunload', () => { ev('snap', {code: ta.value, typed}); flush(); });
 
-(async () => {
-  T = await (await fetch('/api/test/' + token)).json();
-  $('who').textContent = T.name;
+async function begin(pyReady) {
   endAt = Date.now() + T.remaining * 1000;
   T.questions.forEach((q, i) => {
     const b = document.createElement('button'); b.textContent = q.title;
@@ -243,11 +246,28 @@ window.addEventListener('beforeunload', () => { ev('snap', {code: ta.value, type
     if (s === 0) { ta.disabled = true; tin.disabled = true; $('run').disabled = $('sub').disabled = true; }
   }, 1000);
   tout.innerHTML = '<span class="dim">Cargando Python…</span>';
-  py = await loadPyodide(); py.runPython(PYRUN);
+  await pyReady;
   resetTerm();
   $('run').disabled = $('sub').disabled = false;
   $('run').onclick = startRun;
   $('sub').onclick = submit;
+}
+
+(async () => {
+  const pyReady = loadPyodide().then(p => { py = p; py.runPython(PYRUN); });
+  T = await (await fetch('/api/test/' + token)).json();
+  $('who').textContent = T.name;
+  if (T.started) return begin(pyReady);
+  $('sname').textContent = 'Hola, ' + T.name;
+  $('sinfo').textContent = 'Tienes ' + T.minutes + ' minutos. El tiempo empieza cuando pulses el botón.';
+  $('start').hidden = false;
+  $('startbtn').onclick = async () => {
+    $('startbtn').disabled = true;
+    await fetch('/api/start/' + token, {method: 'POST'});
+    T = await (await fetch('/api/test/' + token)).json();
+    $('start').hidden = true;
+    begin(pyReady);
+  };
 })();
 </script>
 </body>

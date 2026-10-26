@@ -155,10 +155,8 @@ def api_test(token):
     c = get_candidate(token)
     now = time.time()
     if not c["started"]:
-        run("UPDATE candidates SET started=? WHERE token=?", (now, token))
-        started = now
-    else:
-        started = c["started"]
+        return jsonify(name=c["name"], started=False, minutes=CONFIG["minutes"])
+    started = c["started"]
     questions = []
     for q in CONFIG["questions"]:
         v = q["variants"][c["variant"] % len(q["variants"])]
@@ -167,7 +165,14 @@ def api_test(token):
     for r in run("SELECT q, data FROM events WHERE token=? AND type IN ('snap','submit') ORDER BY id", (token,)):
         saved[r["q"]] = json.loads(r["data"]).get("code", "")
     remaining = max(0, CONFIG["minutes"] * 60 - (now - started))
-    return jsonify(name=c["name"], questions=questions, saved=saved, remaining=remaining)
+    return jsonify(name=c["name"], started=True, questions=questions, saved=saved, remaining=remaining)
+
+
+@app.route("/api/start/<token>", methods=["POST"])
+def api_start(token):
+    get_candidate(token)
+    run("UPDATE candidates SET started=? WHERE token=? AND started IS NULL", (time.time(), token))
+    return jsonify(ok=True)
 
 
 @app.route("/api/events/<token>", methods=["POST"])
