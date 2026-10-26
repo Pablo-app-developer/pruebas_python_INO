@@ -117,7 +117,13 @@ def ensure_ready():
 
 @app.before_request
 def _init():
-    ensure_ready()
+    try:
+        if IS_VERCEL and not PG:
+            names = sorted(k for k in os.environ if any(w in k for w in ("URL", "POSTGRES", "STORAGE", "DATABASE")))
+            raise RuntimeError("No llegó la cadena de la base de datos. Variables vistas (solo nombres): " + ", ".join(names))
+        ensure_ready()
+    except Exception as e:
+        return Response(f"Error de inicio: {type(e).__name__}: {str(e)[:400]}", 500, mimetype="text/plain")
 
 
 def admin_required(fn):
