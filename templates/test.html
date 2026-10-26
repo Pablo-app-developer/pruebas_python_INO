@@ -108,7 +108,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"></script>
-<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
 <script>
 const token = location.pathname.split('/').pop();
 const $ = id => document.getElementById(id);
@@ -152,10 +151,31 @@ import json, io, re, contextlib, traceback
 class _NeedInput(BaseException):
     pass
 
+class _TooMuch(BaseException):
+    pass
+
+class _Out(io.StringIO):
+    stop = False
+    n = 0
+    def write(self, s):
+        # tras pedir un dato que aun no existe, cualquier print corta el programa
+        # (un except: sin tipo no puede dejarlo seguir en bucle)
+        if self.stop:
+            raise _NeedInput()
+        self.n += len(s)
+        if self.n > 100000:
+            raise _TooMuch()
+        return super().write(s)
+
 def _fmt(e):
     s = "Traceback (most recent call last):\\n"
-    for f in traceback.extract_tb(e.__traceback__):
-        if f.filename == "programa.py":
+    fr = [f for f in traceback.extract_tb(e.__traceback__) if f.filename == "programa.py"]
+    if len(fr) > 6:
+        fr = fr[:3] + [None] + fr[-3:]
+    for f in fr:
+        if f is None:
+            s += "  ... (se repite) ..." + "\\n"
+        else:
             s += '  File "programa.py", line %s, in %s\\n' % (f.lineno, f.name)
     if isinstance(e, SyntaxError):
         s += '  File "programa.py", line %s\\n    %s\\n' % (e.lineno, (e.text or "").strip())
@@ -163,12 +183,13 @@ def _fmt(e):
 
 def _exec(code, inputs, quiet):
     ns = {"__name__": "__main__"}
-    out = io.StringIO()
+    out = _Out()
     idx = [0]
     def fake_input(prompt=""):
         if not quiet:
             out.write(str(prompt))
         if idx[0] >= len(inputs):
+            out.stop = True
             raise _NeedInput()
         v = inputs[idx[0]]; idx[0] += 1
         if not quiet:
@@ -177,12 +198,18 @@ def _exec(code, inputs, quiet):
     ns["input"] = fake_input
     status, err = "done", ""
     try:
-        with contextlib.redirect_stdout(out):
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
             exec(compile(code, "programa.py", "exec"), ns)
     except _NeedInput:
-        status = "need_input"
+        pass
+    except SystemExit:
+        pass
+    except _TooMuch:
+        status, err = "error", "Salida demasiado larga (limite de 100000 caracteres)\\n"
     except BaseException as e:
         status, err = "error", _fmt(e)
+    if out.stop:
+        status, err = "need_input", ""
     return out.getvalue(), status, err, ns
 
 def _interactive(code, inputs):
@@ -199,6 +226,8 @@ def _cmp(out, check, exp):
     if check == "float":
         return any(abs(x - exp) < 1e-6 for x in n)
     e = [float(x) for x in exp]
+    if check == "ints_all":
+        return n == e
     return any(n[i:i + len(e)] == e for i in range(len(n) - len(e) + 1))
 
 def _check(code, tests):
@@ -218,16 +247,79 @@ def _check(code, tests):
     return json.dumps(res)
 `;
 
+const PY_CDN = 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/';
+const RUN_LIMIT_MS = 20000;
+const WORKER_SRC = `
+importScripts('${PY_CDN}pyodide.js');
+const ready = loadPyodide({indexURL: '${PY_CDN}'}).then(py => { py.runPython(${JSON.stringify(PYRUN)}); return py; });
+ready.then(() => postMessage({ready: true}), e => postMessage({fatal: String(e)}));
+onmessage = async e => {
+  const {id, fn, a, b} = e.data;
+  const py = await ready;
+  py.globals.set('_a', a); py.globals.set('_b', b);
+  try { postMessage({id, r: py.runPython(fn + '(_a,_b)')}); }
+  catch (err) { postMessage({id, error: String(err)}); }
+};`;
+
+let worker, workerReady, pending = null, seq = 0, busy = false, expired = false;
+
+function spawnWorker() {
+  const w = new Worker(URL.createObjectURL(new Blob([WORKER_SRC], {type: 'text/javascript'})));
+  worker = w;
+  workerReady = new Promise((res, rej) => {
+    w.onmessage = e => {
+      const d = e.data;
+      if (d.ready) res();
+      else if (d.fatal) rej(new Error(d.fatal));
+      else if (pending && d.id === pending.id) { const p = pending; pending = null; clearTimeout(p.timer); p.resolve(d); }
+    };
+  });
+  w.onerror = () => {
+    if (!pending) return;
+    const p = pending; pending = null; clearTimeout(p.timer);
+    w.terminate(); spawnWorker(); p.resolve({crash: true});
+  };
+}
+
+// Ejecuta una funcion de PYRUN en el worker; a los 20 s lo mata y arranca uno nuevo.
+function callPy(fn, a, b) {
+  return workerReady.then(() => new Promise(resolve => {
+    const id = ++seq;
+    const timer = setTimeout(() => { pending = null; worker.terminate(); spawnWorker(); resolve({timeout: true}); }, RUN_LIMIT_MS);
+    pending = {id, resolve, timer};
+    worker.postMessage({id, fn, a, b});
+  }));
+}
+
+function setBusy(b) {
+  busy = b;
+  $('run').disabled = $('sub').disabled = b || expired;
+}
+
+function showLimit(res) {
+  const msg = res.timeout
+    ? '[Tiempo límite excedido: el programa se detuvo tras 20 segundos. ¿Hay un bucle infinito?]'
+    : '[El programa se detuvo por un error del sistema]';
+  tout.innerHTML = banner() + `<span class="err">${msg}</span>\n<span class="pr">${PROMPT}</span>`;
+  tin.hidden = true;
+}
+
 function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
 
 function banner() {
   return `<span class="pr">${PROMPT}</span>python3 programa.py\n`;
 }
 
-function runProgram() {
-  py.globals.set('_c', ta.value);
-  py.globals.set('_i', JSON.stringify(inputs));
-  const r = JSON.parse(py.runPython('_interactive(_c,_i)'));
+async function runProgram() {
+  if (busy) return 'busy';
+  setBusy(true);
+  tin.hidden = true;
+  tout.innerHTML = banner() + '<span class="dim">(ejecutando...)</span>';
+  const res = await callPy('_interactive', ta.value, JSON.stringify(inputs));
+  setBusy(false);
+  if (res.timeout || res.crash) { showLimit(res); ev('timeout', {kind: res.timeout ? 'timeout' : 'crash'}); return 'timeout'; }
+  if (res.error) { tout.innerHTML = banner() + `<span class="err">${esc(res.error)}</span>`; return 'error'; }
+  const r = JSON.parse(res.r);
   let html = banner() + esc(r.out);
   if (r.err) html += `<span class="err">${esc(r.err)}</span>`;
   if (r.status === 'need_input') {
@@ -241,17 +333,18 @@ function runProgram() {
   return r.status;
 }
 
-function startRun() {
+async function startRun() {
   inputs = [];
-  const st = runProgram();
+  const st = await runProgram();
   ev('run', {status: st});
 }
 
-tin.addEventListener('keydown', e => {
+tin.addEventListener('keydown', async e => {
   if (e.key !== 'Enter') return;
   e.preventDefault();
+  if (busy) return;
   inputs.push(tin.value);
-  runProgram();
+  await runProgram();
 });
 screen.addEventListener('click', () => { if (!tin.hidden) tin.focus(); });
 
@@ -276,13 +369,18 @@ function show(i) {
   ev('enter_q');
 }
 
-function submit() {
+async function submit() {
+  if (busy) return;
   const q = T.questions[cur];
-  py.globals.set('_c', ta.value);
-  py.globals.set('_t', JSON.stringify(q.tests));
-  const res = JSON.parse(py.runPython('_check(_c,_t)'));
-  const passed = res.filter(Boolean).length;
-  ev('submit', {code: ta.value, passed, total: res.length});
+  const code = ta.value;
+  setBusy(true);
+  $('msg').textContent = 'Entregando...';
+  const res = await callPy('_check', code, JSON.stringify(q.tests));
+  setBusy(false);
+  let passed = 0, total = q.tests.length;
+  if (res.r) { const arr = JSON.parse(res.r); passed = arr.filter(Boolean).length; total = arr.length; }
+  else ev('timeout', {kind: res.timeout ? 'timeout' : 'crash', on: 'submit'});
+  ev('submit', {code, passed, total});
   $('nav').children[cur].classList.add('done');
   $('msg').textContent = 'Ejercicio entregado ✓';
   flush();
@@ -300,7 +398,7 @@ window.addEventListener('focus', () => ev('focus'));
 document.addEventListener('visibilitychange', () => ev(document.hidden ? 'hidden' : 'visible'));
 window.addEventListener('beforeunload', () => { ev('snap', {code: ta.value, typed}); flush(); });
 
-async function begin(pyReady) {
+async function begin() {
   endAt = Date.now() + T.remaining * 1000;
   T.questions.forEach((q, i) => {
     const b = document.createElement('button'); b.textContent = q.title;
@@ -310,10 +408,10 @@ async function begin(pyReady) {
   setInterval(() => {
     const s = Math.max(0, Math.floor((endAt - Date.now()) / 1000));
     $('timer').textContent = '⏱ ' + String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
-    if (s === 0) { ta.disabled = true; tin.disabled = true; $('run').disabled = $('sub').disabled = true; }
+    if (s === 0) { expired = true; ta.disabled = true; tin.disabled = true; $('run').disabled = $('sub').disabled = true; }
   }, 1000);
   tout.innerHTML = '<span class="dim">Cargando Python…</span>';
-  await pyReady;
+  try { await workerReady; } catch (e) { tout.innerHTML = '<span class="err">No se pudo cargar Python. Recarga la página.</span>'; return; }
   resetTerm();
   $('run').disabled = $('sub').disabled = false;
   $('run').onclick = startRun;
@@ -321,10 +419,10 @@ async function begin(pyReady) {
 }
 
 (async () => {
-  const pyReady = loadPyodide().then(p => { py = p; py.runPython(PYRUN); });
+  spawnWorker();
   T = await (await fetch('/api/test/' + token)).json();
   $('who').textContent = T.name;
-  if (T.started) return begin(pyReady);
+  if (T.started) return begin();
   $('sname').textContent = T.name;
   $('sinfo').textContent = T.minutes + ' minutos';
   $('start').hidden = false;
@@ -333,7 +431,7 @@ async function begin(pyReady) {
     await fetch('/api/start/' + token, {method: 'POST'});
     T = await (await fetch('/api/test/' + token)).json();
     $('start').hidden = true;
-    begin(pyReady);
+    begin();
   };
 })();
 </script>

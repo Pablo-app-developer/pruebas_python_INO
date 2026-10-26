@@ -48,9 +48,11 @@
         {
           "statement": "Escriba una función es_primo(n) que devuelva True o False.\n\nÚsela para imprimir todos los números primos entre 1 y 50.\n\nEjemplo: es_primo(7) devuelve True y es_primo(8) devuelve False.",
           "tests": [
-            {"inputs": [], "check": "ints", "expected": [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47]},
+            {"inputs": [], "check": "ints_all", "expected": [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47]},
             {"call": "es_primo", "inputs": [], "args": [7], "expected": true},
-            {"call": "es_primo", "inputs": [], "args": [8], "expected": false}
+            {"call": "es_primo", "inputs": [], "args": [8], "expected": false},
+            {"call": "es_primo", "inputs": [], "args": [1], "expected": false},
+            {"call": "es_primo", "inputs": [], "args": [2], "expected": true}
           ]
         }
       ]
