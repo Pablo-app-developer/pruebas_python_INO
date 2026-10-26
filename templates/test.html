@@ -29,13 +29,37 @@
   #screen .err{color:#ff6b6b}
   #tin{background:transparent;border:0;outline:0;color:#e6e6e6;font:inherit;caret-color:#4ec24e;width:60%;padding:0}
   small{color:#666}
-  #start{position:fixed;inset:0;background:#f5f6f8;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px}
-  #start button{padding:14px 34px;font-size:18px;border:0;border-radius:8px;background:#16a34a;color:#fff;cursor:pointer}
+  #start{position:fixed;inset:0;background:linear-gradient(160deg,#1f2937,#111827);display:flex;align-items:center;justify-content:center;padding:20px;z-index:10}
   #start[hidden]{display:none}
+  #start .card{background:#fff;border-radius:14px;max-width:520px;width:100%;padding:34px 36px;box-shadow:0 12px 40px #0006;text-align:left}
+  #start .tag{display:inline-block;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#2563eb;font-weight:700}
+  #start h1{margin:6px 0 2px;font-size:26px}
+  #start .who{color:#555;margin:0 0 18px;font-size:16px}
+  #start ul{margin:0 0 22px;padding:0;list-style:none}
+  #start li{padding:9px 0;border-top:1px solid #eee;font-size:15px;display:flex;gap:10px}
+  #start li b{min-width:92px;color:#111}
+  #start button{width:100%;padding:15px;font-size:17px;font-weight:600;border:0;border-radius:9px;background:#16a34a;color:#fff;cursor:pointer}
+  #start button:hover{background:#15803d}
+  #start button:disabled{opacity:.6;cursor:default}
+  #start .note{margin:12px 0 0;font-size:13px;color:#777;text-align:center}
 </style>
 </head>
 <body>
-<div id="start" hidden><h2 id="sname"></h2><p id="sinfo"></p><button id="startbtn">Empezar prueba</button></div>
+<div id="start" hidden>
+  <div class="card">
+    <span class="tag">Prueba técnica</span>
+    <h1>Python</h1>
+    <p class="who" id="sname"></p>
+    <ul>
+      <li><b>Duración</b><span id="sinfo"></span></li>
+      <li><b>Ejercicios</b><span>5 ejercicios, 1 punto cada uno</span></li>
+      <li><b>Cómo</b><span>Escribe tu código, pulsa Ejecutar y responde a input() en la terminal.</span></li>
+      <li><b>Reglas</b><span>No uses el celular, herramientas de IA ni otras pestañas. La actividad de esta página queda registrada.</span></li>
+    </ul>
+    <button id="startbtn">Empezar prueba</button>
+    <p class="note">El tiempo comienza al pulsar el botón.</p>
+  </div>
+</div>
 <header><span id="who">Cargando…</span><span id="timer"></span></header>
 <main>
   <nav id="nav"></nav>
@@ -258,8 +282,8 @@ async function begin(pyReady) {
   T = await (await fetch('/api/test/' + token)).json();
   $('who').textContent = T.name;
   if (T.started) return begin(pyReady);
-  $('sname').textContent = 'Hola, ' + T.name;
-  $('sinfo').textContent = 'Tienes ' + T.minutes + ' minutos. El tiempo empieza cuando pulses el botón.';
+  $('sname').textContent = T.name;
+  $('sinfo').textContent = T.minutes + ' minutos';
   $('start').hidden = false;
   $('startbtn').onclick = async () => {
     $('startbtn').disabled = true;
