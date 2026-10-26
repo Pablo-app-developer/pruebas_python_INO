@@ -6,20 +6,48 @@
  table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:6px 8px;text-align:left;font-size:14px}
  th{background:#f0f0f0}.hi{background:#fee2e2}.mid{background:#fef3c7}
  code{background:#eee;padding:2px 4px}
+ .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+ .bar form{margin:0}
+ .st{display:inline-block;padding:1px 7px;border-radius:10px;font-size:12px;color:#fff}
+ .st.corriendo{background:#16a34a}.st.pausada{background:#d97706}.st.terminada{background:#6b7280}.st.sin_iniciar{background:#9ca3af}
+ .tm{font-weight:bold}
+ form.inline{display:inline;margin:0}
 </style></head><body>
 <h2>Candidatos</h2>
-<form method="post" action="/admin/new"><input name="name" placeholder="Nombre del candidato" required> <button>Crear link</button></form><br>
+<div class="bar">
+  <form method="post" action="/admin/new"><input name="name" placeholder="Nombre del candidato" required> <button>Crear link</button></form>
+  <form method="post" action="/admin/pause_all" onsubmit="return confirm('¿Pausar el tiempo de todos los candidatos en curso?')"><button>⏸ Pausar a todos</button></form>
+  <form method="post" action="/admin/resume_all"><button>▶ Reanudar a todos</button></form>
+</div>
 <table>
-<tr><th>Nombre</th><th>Link para el candidato</th><th>Inicio</th><th>Entregas</th><th>Pruebas OK</th><th>Pegados</th><th>Salidas de ventana</th><th>Sospecha</th><th></th></tr>
+<tr><th>Nombre</th><th>Link para el candidato</th><th>Inicio</th><th>Tiempo restante</th><th>Entregas</th><th>Pruebas OK</th><th>Pegados</th><th>Salidas de ventana</th><th>Sospecha</th><th></th></tr>
 {% for t, i in info.items() %}
+{% set tm = i.time %}
 <tr class="{{ 'hi' if i.score>=60 else 'mid' if i.score>=30 else '' }}">
  <td><a href="/admin/c/{{ t }}">{{ i.c.name }}</a></td>
  <td><code>{{ base }}/t/{{ t }}</code></td>
  <td>{{ i.c.started|ts }}</td>
+ <td>
+  <span class="tm" data-rem="{{ tm.remaining|int }}" data-run="{{ 1 if tm.state == 'corriendo' else 0 }}">{{ '%02d:%02d'|format((tm.remaining|int)//60, (tm.remaining|int)%60) }}</span>
+  <span class="st {{ tm.state }}">{{ {'sin_iniciar': 'sin iniciar', 'corriendo': 'corriendo', 'pausada': 'en pausa', 'terminada': 'terminada'}[tm.state] }}</span>
+  {% if tm.state == 'corriendo' %}
+   <form class="inline" method="post" action="/admin/pause/{{ t }}"><button>⏸ Pausar</button></form>
+  {% elif tm.state == 'pausada' %}
+   <form class="inline" method="post" action="/admin/resume/{{ t }}"><button>▶ Reanudar</button></form>
+  {% endif %}
+ </td>
  <td>{{ i.s.submits }}</td><td>{{ i.s.passed }}/{{ i.s.total }}</td>
  <td>{{ i.s.pastes }} ({{ i.s.pasted_chars }} car.)</td><td>{{ i.s.blurs }}</td>
  <td><b>{{ i.score }}</b></td><td><form method="post" action="/admin/delete/{{ t }}" onsubmit="return confirm('Eliminar a {{ i.c.name|e }} y todos sus datos?')"><button>Eliminar</button></form></td>
 </tr>
 {% endfor %}
 </table>
+<script>
+// cuenta regresiva local de los que están corriendo; la página se recarga sola cada 15 s
+const fmt = s => String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+setInterval(() => document.querySelectorAll('.tm[data-run="1"]').forEach(el => {
+  const r = Math.max(0, +el.dataset.rem - 1); el.dataset.rem = r; el.textContent = fmt(r);
+}), 1000);
+setInterval(() => { if (!document.querySelector('input[name=name]').value) location.reload(); }, 15000);
+</script>
 </body></html>

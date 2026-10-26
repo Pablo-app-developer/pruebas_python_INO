@@ -57,6 +57,11 @@
   .cm-s-vscode .cm-error{color:#f44747}
   #start{position:fixed;inset:0;background:linear-gradient(160deg,#1f2937,#111827);display:flex;align-items:center;justify-content:center;padding:20px;z-index:10}
   #start[hidden]{display:none}
+  #pause{position:fixed;inset:0;background:rgba(17,24,39,.94);display:flex;align-items:center;justify-content:center;padding:20px;z-index:20}
+  #pause[hidden]{display:none}
+  #pause .card{background:#fff;border-radius:14px;max-width:460px;width:100%;padding:30px 34px;text-align:center}
+  #pause h2{margin:0 0 10px}
+  #pause p{margin:6px 0;color:#444}
   #start .card{background:#fff;border-radius:14px;max-width:520px;width:100%;padding:34px 36px;box-shadow:0 12px 40px #0006;text-align:left}
   #start .tag{display:inline-block;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#2563eb;font-weight:700}
   #start h1{margin:6px 0 2px;font-size:26px}
@@ -71,6 +76,13 @@
 </style>
 </head>
 <body>
+<div id="pause" hidden>
+  <div class="card">
+    <h2>⏸ Prueba en pausa</h2>
+    <p>El tiempo está detenido.</p>
+    <p>Espera la indicación del evaluador para continuar.</p>
+  </div>
+</div>
 <div id="start" hidden>
   <div class="card">
     <span class="tag">Prueba técnica</span>
@@ -127,10 +139,10 @@ const ta = {
 };
 const tin = $('tin'), tout = $('tout'), screen = $('screen');
 const PROMPT = 'candidato@prueba:~$ ';
-let T, cur = 0, py, buf = [], codes = {}, lastSnap = '', typed = 0, endAt = 0, inputs = [];
+let T, cur = 0, py, buf = [], codes = {}, lastSnap = '', typed = 0, endAt = 0, inputs = [], paused = false, remPaused = 0, uiReady = false;
 
 function ev(type, data) {
-  if (!T || !T.questions) return;
+  if (!T || !T.questions || paused) return;
   buf.push({q: T ? T.questions[cur].id : null, type, data: data || {}, t: Date.now() / 1000});
 }
 function flush() {
@@ -308,7 +320,7 @@ function callPy(fn, a, b) {
 
 function setBusy(b) {
   busy = b;
-  $('run').disabled = $('sub').disabled = b || expired;
+  $('run').disabled = $('sub').disabled = b || expired || paused || !uiReady;
 }
 
 function showLimit(res) {
@@ -413,22 +425,42 @@ window.addEventListener('focus', () => ev('focus'));
 document.addEventListener('visibilitychange', () => ev(document.hidden ? 'hidden' : 'visible'));
 window.addEventListener('beforeunload', () => { ev('snap', {code: ta.value, typed}); flush(); });
 
+// El evaluador puede pausar/reanudar desde el panel: se consulta al servidor cada 3 s.
+function setPaused(p) {
+  if (p === paused) return;
+  paused = p;
+  $('pause').hidden = !p;
+  ta.disabled = p || expired; tin.disabled = p || expired;
+  setBusy(busy);
+}
+
+async function pollState() {
+  try {
+    const s = await (await fetch('/api/state/' + token)).json();
+    endAt = Date.now() + s.remaining * 1000; remPaused = s.remaining;
+    setPaused(s.paused);
+  } catch (e) { /* sin red: se conserva el último estado */ }
+}
+
 async function begin() {
   endAt = Date.now() + T.remaining * 1000;
+  remPaused = T.remaining;
+  setPaused(!!T.paused);
+  setInterval(pollState, 3000);
   T.questions.forEach((q, i) => {
     const b = document.createElement('button'); b.textContent = q.title;
     b.onclick = () => show(i); $('nav').appendChild(b);
   });
   show(0);
   setInterval(() => {
-    const s = Math.max(0, Math.floor((endAt - Date.now()) / 1000));
-    $('timer').textContent = '⏱ ' + String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
-    if (s === 0) { expired = true; ta.disabled = true; tin.disabled = true; $('run').disabled = $('sub').disabled = true; }
+    const s = Math.max(0, Math.floor(paused ? remPaused : (endAt - Date.now()) / 1000));
+    $('timer').textContent = (paused ? '⏸ ' : '⏱ ') + String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+    if (s === 0 && !paused) { expired = true; ta.disabled = true; tin.disabled = true; $('run').disabled = $('sub').disabled = true; }
   }, 1000);
   tout.innerHTML = '<span class="dim">Cargando Python…</span>';
   try { await workerReady; } catch (e) { tout.innerHTML = '<span class="err">No se pudo cargar Python. Recarga la página.</span>'; return; }
   resetTerm();
-  $('run').disabled = $('sub').disabled = false;
+  uiReady = true; setBusy(busy);
   $('run').onclick = startRun;
   $('sub').onclick = submit;
 }

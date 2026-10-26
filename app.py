@@ -102,6 +102,12 @@ def ensure_ready():
     try:
         run("CREATE TABLE IF NOT EXISTS candidates(token TEXT PRIMARY KEY, name TEXT, variant INTEGER, "
             "created DOUBLE PRECISION, started DOUBLE PRECISION)", con=con)
+        # pausa del reloj (también migra bases creadas antes de esta función)
+        for col in ("paused_at", "paused_total"):
+            if PG:
+                run(f"ALTER TABLE candidates ADD COLUMN IF NOT EXISTS {col} DOUBLE PRECISION", con=con)
+            elif col not in [r["name"] for r in run("PRAGMA table_info(candidates)", con=con).fetchall()]:
+                run(f"ALTER TABLE candidates ADD COLUMN {col} DOUBLE PRECISION", con=con)
         pk = "BIGSERIAL PRIMARY KEY" if PG else "INTEGER PRIMARY KEY AUTOINCREMENT"
         run(f"CREATE TABLE IF NOT EXISTS events(id {pk}, token TEXT, q TEXT, type TEXT, data TEXT, "
             "t DOUBLE PRECISION)", con=con)
@@ -146,6 +152,23 @@ def get_candidate(token):
     return c
 
 
+def time_state(c, now=None):
+    """Estado del reloj de un candidato: el tiempo en pausa no cuenta."""
+    now = now or time.time()
+    total = CONFIG["minutes"] * 60
+    if not c["started"]:
+        return dict(state="sin_iniciar", remaining=total, raw=total)
+    ref = c["paused_at"] or now
+    raw = total - (ref - c["started"] - (c["paused_total"] or 0))
+    state = "pausada" if c["paused_at"] else ("terminada" if raw <= 0 else "corriendo")
+    return dict(state=state, remaining=max(0, raw), raw=raw)
+
+
+def log_event(token, type_, data=None):
+    run("INSERT INTO events(token,q,type,data,t) VALUES(?,?,?,?,?)",
+        (token, None, type_, json.dumps(data or {}), time.time()))
+
+
 # ---------- candidato ----------
 
 @app.route("/")
@@ -163,10 +186,8 @@ def test_page(token):
 @app.route("/api/test/<token>")
 def api_test(token):
     c = get_candidate(token)
-    now = time.time()
     if not c["started"]:
         return jsonify(name=c["name"], started=False, minutes=CONFIG["minutes"])
-    started = c["started"]
     questions = []
     for q in CONFIG["questions"]:
         v = q["variants"][c["variant"] % len(q["variants"])]
@@ -174,8 +195,15 @@ def api_test(token):
     saved = {}
     for r in run("SELECT q, data FROM events WHERE token=? AND type IN ('snap','submit') ORDER BY id", (token,)):
         saved[r["q"]] = json.loads(r["data"]).get("code", "")
-    remaining = max(0, CONFIG["minutes"] * 60 - (now - started))
-    return jsonify(name=c["name"], started=True, questions=questions, saved=saved, remaining=remaining)
+    ts_ = time_state(c)
+    return jsonify(name=c["name"], started=True, questions=questions, saved=saved,
+                   remaining=ts_["remaining"], paused=ts_["state"] == "pausada")
+
+
+@app.route("/api/state/<token>")
+def api_state(token):
+    ts_ = time_state(get_candidate(token))
+    return jsonify(remaining=ts_["remaining"], paused=ts_["state"] == "pausada")
 
 
 @app.route("/api/start/<token>", methods=["POST"])
@@ -188,7 +216,7 @@ def api_start(token):
 @app.route("/api/events/<token>", methods=["POST"])
 def api_events(token):
     c = get_candidate(token)
-    if c["started"] and time.time() > c["started"] + CONFIG["minutes"] * 60 + 30:
+    if c["started"] and time_state(c)["raw"] < -30:
         return jsonify(ok=False), 403
     rows = [
         (token, e.get("q"), e.get("type"), json.dumps(e.get("data") or {}), e.get("t") or time.time())
@@ -248,7 +276,7 @@ def analyze():
                 finals.setdefault(e["q"], {})[c["token"]] = d.get("code", "")
         s["passed"] = sum(p for p, _ in last.values())
         s["total"] = sum(t for _, t in last.values())
-        info[c["token"]] = dict(c=c, s=s, flags=[], score=0)
+        info[c["token"]] = dict(c=c, s=s, flags=[], score=0, time=time_state(c))
 
     for t, i in info.items():
         s = i["s"]
@@ -295,6 +323,52 @@ def admin_new():
     n = run("SELECT COUNT(*) AS n FROM candidates").fetchone()["n"]
     run("INSERT INTO candidates(token,name,variant,created) VALUES(?,?,?,?)",
         (secrets.token_urlsafe(8), request.form["name"].strip(), n, time.time()))
+    return redirect("/admin")
+
+
+def _pause(token):
+    now = time.time()
+    n = run("UPDATE candidates SET paused_at=? WHERE token=? AND started IS NOT NULL AND paused_at IS NULL",
+            (now, token)).rowcount
+    if n:
+        log_event(token, "admin_pause")
+
+
+def _resume(token):
+    now = time.time()
+    n = run("UPDATE candidates SET paused_total = COALESCE(paused_total, 0) + (? - paused_at), paused_at = NULL "
+            "WHERE token=? AND paused_at IS NOT NULL", (now, token)).rowcount
+    if n:
+        log_event(token, "admin_resume")
+
+
+@app.route("/admin/pause/<token>", methods=["POST"])
+@admin_required
+def admin_pause(token):
+    _pause(token)
+    return redirect("/admin")
+
+
+@app.route("/admin/resume/<token>", methods=["POST"])
+@admin_required
+def admin_resume(token):
+    _resume(token)
+    return redirect("/admin")
+
+
+@app.route("/admin/pause_all", methods=["POST"])
+@admin_required
+def admin_pause_all():
+    for c in run("SELECT token FROM candidates WHERE started IS NOT NULL AND paused_at IS NULL").fetchall():
+        _pause(c["token"])
+    return redirect("/admin")
+
+
+@app.route("/admin/resume_all", methods=["POST"])
+@admin_required
+def admin_resume_all():
+    for c in run("SELECT token FROM candidates WHERE paused_at IS NOT NULL").fetchall():
+        _resume(c["token"])
     return redirect("/admin")
 
 
