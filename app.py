@@ -281,26 +281,11 @@ def analyze():
     for t, i in info.items():
         s = i["s"]
         big = s["pasted_chars"]
+        # la sospecha se calcula solo con los datos pegados (no con salidas de ventana ni similitud)
         if s["pastes"]:
-            i["score"] += min(40, 10 * s["pastes"] + big // 50)
+            i["score"] += min(100, 10 * s["pastes"] + big // 50)
             i["flags"].append(f"{s['pastes']} pegado(s), {big} caracteres pegados")
-        if s["blurs"] >= 3:
-            i["score"] += min(25, 5 * s["blurs"])
-            i["flags"].append(f"salió de la pestaña/ventana {s['blurs']} veces")
-
-    pairs = []
-    for q, codes in finals.items():
-        for (a, ca), (b, cb) in combinations(codes.items(), 2):
-            # los ejercicios cortos se parecen de forma natural: solo se comparan programas largos
-            if len(ca.strip()) < 100 or len(cb.strip()) < 100:
-                continue
-            r = difflib.SequenceMatcher(None, normalize(ca), normalize(cb)).ratio()
-            if r >= 0.9:
-                pairs.append((q, a, b, round(r, 2)))
-                for t, o in ((a, b), (b, a)):
-                    info[t]["score"] += 40
-                    info[t]["flags"].append(f"{q}: {int(r * 100)}% similar a {info[o]['c']['name']}")
-    return info, pairs
+    return info, []
 
 
 @app.template_filter("ts")
