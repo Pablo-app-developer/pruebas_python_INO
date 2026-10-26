@@ -10,7 +10,7 @@
 <h2>Candidatos</h2>
 <form method="post" action="/admin/new"><input name="name" placeholder="Nombre del candidato" required> <button>Crear link</button></form><br>
 <table>
-<tr><th>Nombre</th><th>Link para el candidato</th><th>Inicio</th><th>Entregas</th><th>Pruebas OK</th><th>Pegados</th><th>Salidas de ventana</th><th>Sospecha</th></tr>
+<tr><th>Nombre</th><th>Link para el candidato</th><th>Inicio</th><th>Entregas</th><th>Pruebas OK</th><th>Pegados</th><th>Salidas de ventana</th><th>Sospecha</th><th></th></tr>
 {% for t, i in info.items() %}
 <tr class="{{ 'hi' if i.score>=60 else 'mid' if i.score>=30 else '' }}">
  <td><a href="/admin/c/{{ t }}">{{ i.c.name }}</a></td>
@@ -18,7 +18,7 @@
  <td>{{ i.c.started|ts }}</td>
  <td>{{ i.s.submits }}</td><td>{{ i.s.passed }}/{{ i.s.total }}</td>
  <td>{{ i.s.pastes }} ({{ i.s.pasted_chars }} car.)</td><td>{{ i.s.blurs }}</td>
- <td><b>{{ i.score }}</b></td>
+ <td><b>{{ i.score }}</b></td><td><form method="post" action="/admin/delete/{{ t }}" onsubmit="return confirm('Eliminar a {{ i.c.name|e }} y todos sus datos?')"><button>Eliminar</button></form></td>
 </tr>
 {% endfor %}
 </table>

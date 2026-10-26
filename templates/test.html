@@ -30,6 +30,31 @@
   #screen .err{color:#ff6b6b}
   #tin{background:transparent;border:0;outline:0;color:#e6e6e6;font:inherit;caret-color:#4ec24e;width:60%;padding:0}
   small{color:#666}
+  /* editor estilo VS Code (Dark+) */
+  .CodeMirror{height:300px;font-size:15px;line-height:1.5;border-radius:6px}
+  .cm-s-vscode.CodeMirror{background:#1e1e1e;color:#d4d4d4}
+  .cm-s-vscode .CodeMirror-gutters{background:#1e1e1e;border-right:1px solid #333}
+  .cm-s-vscode .CodeMirror-linenumber{color:#858585}
+  .cm-s-vscode .CodeMirror-cursor{border-left:2px solid #aeafad}
+  .cm-s-vscode .CodeMirror-selected{background:#264f78}
+  .cm-s-vscode .CodeMirror-activeline-background{background:#2a2d2e}
+  .cm-s-vscode .CodeMirror-matchingbracket{color:#fff !important;background:#0a4a7a;outline:1px solid #75beff}
+  .cm-s-vscode .CodeMirror-nonmatchingbracket{color:#fff !important;background:#7a1a1a}
+  .cm-s-vscode .cm-keyword{color:#c586c0}
+  .cm-s-vscode .cm-variable{color:#9cdcfe}
+  .cm-s-vscode .cm-variable-2{color:#9cdcfe}
+  .cm-s-vscode .cm-variable-3,.cm-s-vscode .cm-type{color:#4ec9b0}
+  .cm-s-vscode .cm-builtin{color:#4ec9b0}
+  .cm-s-vscode .cm-def{color:#dcdcaa}
+  .cm-s-vscode .cm-property{color:#9cdcfe}
+  .cm-s-vscode .cm-string,.cm-s-vscode .cm-string-2{color:#ce9178}
+  .cm-s-vscode .cm-number{color:#b5cea8}
+  .cm-s-vscode .cm-atom{color:#569cd6}
+  .cm-s-vscode .cm-comment{color:#6a9955;font-style:italic}
+  .cm-s-vscode .cm-operator{color:#d4d4d4}
+  .cm-s-vscode .cm-meta{color:#dcdcaa}
+  .cm-s-vscode .cm-bracket{color:#ffd700}
+  .cm-s-vscode .cm-error{color:#f44747}
   #start{position:fixed;inset:0;background:linear-gradient(160deg,#1f2937,#111827);display:flex;align-items:center;justify-content:center;padding:20px;z-index:10}
   #start[hidden]{display:none}
   #start .card{background:#fff;border-radius:14px;max-width:520px;width:100%;padding:34px 36px;box-shadow:0 12px 40px #0006;text-align:left}
@@ -77,11 +102,31 @@
     <small>Esta sesión registra la actividad en la página (pegado, cambios de ventana y ediciones).</small>
   </section>
 </main>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"></script>
 <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
 <script>
 const token = location.pathname.split('/').pop();
 const $ = id => document.getElementById(id);
-const ta = $('code'), tin = $('tin'), tout = $('tout'), screen = $('screen');
+const cm = CodeMirror.fromTextArea($('code'), {
+  mode: 'python', theme: 'vscode', lineNumbers: true, indentUnit: 4, indentWithTabs: false,
+  matchBrackets: true, autoCloseBrackets: true, styleActiveLine: true, lineWrapping: false,
+  extraKeys: {Tab: c => c.execCommand('insertSoftTab'), 'Shift-Tab': c => c.execCommand('indentLess')}
+});
+cm.on('drop', () => ev('drop'));
+cm.on('change', (c, ch) => { if (ch.origin === '+input') typed++; });
+// `ta` conserva la interfaz del editor anterior (value, disabled, addEventListener)
+const ta = {
+  get value() { return cm.getValue(); },
+  set value(v) { cm.setValue(v); },
+  set disabled(b) { cm.setOption('readOnly', b); },
+  addEventListener: (n, f) => cm.getInputField().addEventListener(n, f)
+};
+const tin = $('tin'), tout = $('tout'), screen = $('screen');
 const PROMPT = 'candidato@prueba:~$ ';
 let T, cur = 0, py, buf = [], codes = {}, lastSnap = '', typed = 0, endAt = 0, inputs = [];
 
@@ -223,6 +268,7 @@ function show(i) {
   $('title').textContent = q.title;
   $('stmt').textContent = q.statement;
   ta.value = codes[i] || T.saved[q.id] || '# Escribe tu código aquí\n';
+  cm.refresh(); cm.clearHistory();
   lastSnap = ta.value;
   [...$('nav').children].forEach((b, j) => b.classList.toggle('on', j === i));
   $('msg').textContent = '';
@@ -248,10 +294,6 @@ function submit() {
     ev('paste', {len: t.length, text: t.slice(0, 300), where: el === ta ? 'editor' : 'terminal'});
   });
   ['copy', 'cut', 'drop'].forEach(n => el.addEventListener(n, () => ev(n)));
-});
-ta.addEventListener('input', e => { if (e.inputType === 'insertText') typed++; });
-ta.addEventListener('keydown', e => {
-  if (e.key === 'Tab') { e.preventDefault(); const s = ta.selectionStart; ta.setRangeText('    ', s, ta.selectionEnd, 'end'); }
 });
 window.addEventListener('blur', () => ev('blur'));
 window.addEventListener('focus', () => ev('focus'));

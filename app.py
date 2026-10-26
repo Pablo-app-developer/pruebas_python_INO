@@ -298,6 +298,14 @@ def admin_new():
     return redirect("/admin")
 
 
+@app.route("/admin/delete/<token>", methods=["POST"])
+@admin_required
+def admin_delete(token):
+    run("DELETE FROM events WHERE token=?", (token,))
+    run("DELETE FROM candidates WHERE token=?", (token,))
+    return redirect("/admin")
+
+
 @app.route("/admin/c/<token>")
 @admin_required
 def admin_detail(token):
