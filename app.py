@@ -313,6 +313,39 @@ def admin():
     return render_template("admin.html", info=info, pairs=pairs, base=request.url_root.rstrip("/"))
 
 
+PLACEHOLDER = "# Escribe tu código aquí"
+
+
+@app.route("/admin/resultados")
+@admin_required
+def admin_resultados():
+    """Resultado final: todas las variables medidas, por candidato y por ejercicio."""
+    info, _ = analyze()
+    orden = [(q["id"], q["title"]) for q in CONFIG["questions"]]
+    detalle = {}
+    for token in info:
+        rows = {qid: dict(codigo=False, entregada=False, passed=0, total=0, pegados=0, chars=0, salidas=0, ejecuciones=0)
+                for qid, _ in orden}
+        for e in run("SELECT q, type, data FROM events WHERE token=? ORDER BY id", (token,)).fetchall():
+            r = rows.get(e["q"])
+            if r is None:
+                continue
+            d = json.loads(e["data"])
+            if e["type"] in ("snap", "submit"):
+                r["codigo"] = bool((d.get("code") or "").replace(PLACEHOLDER, "").strip())
+            if e["type"] == "submit":
+                r["entregada"], r["passed"], r["total"] = True, d.get("passed", 0), d.get("total", 0)
+            elif e["type"] == "paste":
+                r["pegados"] += 1
+                r["chars"] += d.get("len", 0)
+            elif e["type"] == "blur":
+                r["salidas"] += 1
+            elif e["type"] == "run":
+                r["ejecuciones"] += 1
+        detalle[token] = rows
+    return render_template("resultados.html", info=info, detalle=detalle, orden=orden)
+
+
 @app.route("/admin/new", methods=["POST"])
 @admin_required
 def admin_new():

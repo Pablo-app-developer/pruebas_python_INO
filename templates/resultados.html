@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Resultados finales</title>
+<style>
+  *{font-family:"Ubuntu Mono","Cascadia Mono",Consolas,"Courier New",monospace !important}
+ body{margin:24px;color:#222;background:#fafafa}
+ h2{margin:0 0 4px}
+ a{color:#2563eb}
+ table{border-collapse:collapse;width:100%;background:#fff}
+ td,th{border:1px solid #ccc;padding:6px 8px;text-align:left;font-size:14px}
+ th{background:#f0f0f0}
+ .card{background:#fff;border:1px solid #ddd;border-radius:8px;padding:14px 16px;margin:16px 0}
+ .card h3{margin:0 0 8px}
+ .kpis{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 12px}
+ .kpi{border:1px solid #ddd;border-radius:6px;padding:6px 10px;background:#fafafa}
+ .kpi b{display:block;font-size:18px}
+ .kpi small{color:#666}
+ .alta{background:#fee2e2}.media{background:#fef3c7}.baja{background:#dcfce7}
+ .ok{color:#15803d}.no{color:#b91c1c}.gris{color:#777}
+ @media print{a.volver{display:none}}
+</style></head><body>
+<a class="volver" href="/admin">← volver al panel</a>
+<h2>Resultados finales</h2>
+<p class="gris">Pruebas = pruebas automáticas aprobadas en la última entrega de cada ejercicio. Sospecha = pegados (10 por pegado + 1 por cada 50 caracteres) + salidas de pantalla (3 por salida, tope 30), máximo 100.</p>
+
+<table>
+<tr><th>Candidato</th><th>Pruebas</th><th>Pegados</th><th>Caracteres pegados</th><th>Salidas de pantalla</th><th>Tiempo fuera</th><th>Sospecha</th></tr>
+{% for t, i in info.items() %}
+<tr class="{{ 'alta' if i.score >= 60 else 'media' if i.score >= 30 else 'baja' }}">
+ <td><a href="/admin/c/{{ t }}">{{ i.c.name }}</a></td>
+ <td>{{ i.s.passed }}/{{ i.s.total }}</td>
+ <td>{{ i.s.pastes }}</td><td>{{ i.s.pasted_chars }}</td>
+ <td>{{ i.s.blurs }}</td><td>{{ '%d:%02d'|format((i.s.away|int)//60, (i.s.away|int)%60) }}</td>
+ <td><b>{{ i.score }}</b></td>
+</tr>
+{% endfor %}
+</table>
+
+{% for t, i in info.items() %}
+<div class="card">
+ <h3><a href="/admin/c/{{ t }}">{{ i.c.name }}</a></h3>
+ <div class="kpis">
+  <div class="kpi"><small>Inicio</small><b>{{ i.c.started|ts }}</b></div>
+  <div class="kpi"><small>Tiempo restante</small><b>{{ '%02d:%02d'|format((i.time.remaining|int)//60, (i.time.remaining|int)%60) }}</b></div>
+  <div class="kpi"><small>Pegados</small><b>{{ i.s.pastes }} ({{ i.s.pasted_chars }} car.)</b></div>
+  <div class="kpi"><small>Salidas de pantalla</small><b>{{ i.s.blurs }}</b></div>
+  <div class="kpi"><small>Tiempo fuera</small><b>{{ '%d:%02d'|format((i.s.away|int)//60, (i.s.away|int)%60) }}</b></div>
+  <div class="kpi {{ 'alta' if i.score >= 60 else 'media' if i.score >= 30 else 'baja' }}"><small>Sospecha</small><b>{{ i.score }}</b></div>
+ </div>
+ <table>
+  <tr><th>Ejercicio</th><th>Código guardado</th><th>Entregado</th><th>Pruebas</th><th>Ejecuciones</th><th>Pegados</th><th>Caracteres pegados</th><th>Salidas de pantalla</th></tr>
+  {% for qid, titulo in orden %}
+  {% set r = detalle[t][qid] %}
+  <tr>
+   <td>{{ titulo }}</td>
+   <td>{% if r.codigo %}<span class="ok">sí</span>{% else %}<span class="gris">sin respuesta</span>{% endif %}</td>
+   <td>{% if r.entregada %}<span class="ok">sí</span>{% else %}<span class="gris">no</span>{% endif %}</td>
+   <td>{% if r.entregada %}{{ r.passed }}/{{ r.total }}{% else %}<span class="gris">-</span>{% endif %}</td>
+   <td>{{ r.ejecuciones }}</td>
+   <td>{% if r.pegados %}<span class="no">{{ r.pegados }}</span>{% else %}0{% endif %}</td>
+   <td>{{ r.chars }}</td>
+   <td>{{ r.salidas }}</td>
+  </tr>
+  {% endfor %}
+ </table>
+ <p class="gris">{{ i.flags|join(' · ') if i.flags else 'Sin señales.' }}</p>
+</div>
+{% endfor %}
+</body></html>
