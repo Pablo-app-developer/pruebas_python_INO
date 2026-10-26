@@ -21,7 +21,4 @@
 </tr>
 {% endfor %}
 </table>
-<h3>Pares con código muy similar (≥90%, ignorando nombres de variables)</h3>
-{% for q,a,b,r in pairs %}<p>{{ q }}: {{ info[a].c.name }} ↔ {{ info[b].c.name }} — {{ (r*100)|int }}%</p>{% else %}<p>Ninguno.</p>{% endfor %}
-<p><small>Las señales son indicios, no pruebas.</small></p>
 </body></html>
