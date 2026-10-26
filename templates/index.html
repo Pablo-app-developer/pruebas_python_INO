@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prueba de Python</title>
+<style>
+ body{font-family:system-ui,sans-serif;background:#f5f6f8;color:#222;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0}
+ .box{background:#fff;border:1px solid #dde;border-radius:10px;padding:28px 32px;max-width:420px;width:90%;text-align:center}
+ a.n{display:block;margin:10px 0;padding:14px;border:1px solid #ccd;border-radius:8px;text-decoration:none;color:#222;background:#fafbff}
+ a.n:hover{background:#2563eb;color:#fff}
+</style></head><body>
+<div class="box">
+ <h2>Prueba de Python</h2>
+ <p>Selecciona tu nombre para continuar.</p>
+ {% for c in cands %}<a class="n" href="/t/{{ c.token }}" data-name="{{ c.name }}">{{ c.name }}</a>{% else %}<p>No hay candidatos registrados.</p>{% endfor %}
+</div>
+<script>
+document.querySelectorAll('a.n').forEach(a => a.addEventListener('click', e => {
+  if (!confirm('¿Confirmas que eres ' + a.dataset.name + '?')) e.preventDefault();
+}));
+</script>
+</body></html>

@@ -150,7 +150,8 @@ def get_candidate(token):
 
 @app.route("/")
 def index():
-    return Response("Plataforma de pruebas. Usa el enlace personal que te enviaron.", mimetype="text/plain")
+    cands = run("SELECT token, name FROM candidates ORDER BY created").fetchall()
+    return render_template("index.html", cands=cands)
 
 
 @app.route("/t/<token>")
