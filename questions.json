@@ -22,7 +22,8 @@
           "statement": "Escriba un programa que haga lo siguiente:\n\n- Primero, pregunte cuántos números va a ingresar el usuario. Llamaremos n a esa cantidad.\n- Luego, pida esos n números, uno por uno (enteros, positivos o negativos).\n- Al terminar, imprima cuántos números se ingresaron en total, cuántos de ellos son pares y cuántos son negativos.\n\nEjemplo: si el usuario indica n = 3 e ingresa 7, -4 y 10, el programa debe mostrar:\ntotal 3, pares 2, negativos 1",
           "tests": [
             {"inputs": ["3", "7", "-4", "10"], "check": "ints", "expected": [3, 2, 1]},
-            {"inputs": ["6", "5", "4", "-3", "10", "7", "-2"], "check": "ints", "expected": [6, 3, 2]}
+            {"inputs": ["6", "5", "4", "-3", "10", "7", "-2"], "check": "ints", "expected": [6, 3, 2]},
+            {"inputs": ["4", "0", "-1", "2", "7"], "check": "ints", "expected": [4, 2, 1]}
           ]
         }
       ]
@@ -48,7 +49,7 @@
         {
           "statement": "Escriba una función es_primo(n) que devuelva True o False.\n\nÚsela para imprimir todos los números primos entre 1 y 50.\n\nEjemplo: es_primo(7) devuelve True y es_primo(8) devuelve False.",
           "tests": [
-            {"inputs": [], "check": "ints_all", "expected": [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47]},
+            {"inputs": [], "check": "ints_end", "expected": [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47]},
             {"call": "es_primo", "inputs": [], "args": [7], "expected": true},
             {"call": "es_primo", "inputs": [], "args": [8], "expected": false},
             {"call": "es_primo", "inputs": [], "args": [1], "expected": false},

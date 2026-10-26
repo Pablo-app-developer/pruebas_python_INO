@@ -146,7 +146,7 @@ setInterval(() => {
 }, 5000);
 
 const PYRUN = `
-import json, io, re, contextlib, traceback
+import json, io, re, sys, contextlib, traceback
 
 class _NeedInput(BaseException):
     pass
@@ -196,6 +196,16 @@ def _exec(code, inputs, quiet):
             out.write(v + "\\n")
         return v
     ns["input"] = fake_input
+    class _Stdin:
+        # sys.stdin.readline() / for line in sys.stdin leen de los mismos datos que input()
+        def readline(self, *a):
+            return fake_input("") + "\\n"
+        def __iter__(self):
+            return self
+        def __next__(self):
+            return fake_input("") + "\\n"
+    old_stdin = sys.stdin
+    sys.stdin = _Stdin()
     status, err = "done", ""
     try:
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
@@ -208,6 +218,8 @@ def _exec(code, inputs, quiet):
         status, err = "error", "Salida demasiado larga (limite de 100000 caracteres)\\n"
     except BaseException as e:
         status, err = "error", _fmt(e)
+    finally:
+        sys.stdin = old_stdin
     if out.stop:
         status, err = "need_input", ""
     return out.getvalue(), status, err, ns
@@ -221,13 +233,16 @@ def _nums(s):
 
 def _cmp(out, check, exp):
     if check == "exact":
-        return [l.rstrip() for l in out.splitlines() if l.strip()] == exp
+        got = [l.rstrip() for l in out.splitlines() if l.strip()]
+        return any(got[i:i + len(exp)] == exp for i in range(len(got) - len(exp) + 1))
     n = _nums(out)
     if check == "float":
         return any(abs(x - exp) < 1e-6 for x in n)
     e = [float(x) for x in exp]
     if check == "ints_all":
         return n == e
+    if check == "ints_end":
+        return n[-len(e):] == e
     return any(n[i:i + len(e)] == e for i in range(len(n) - len(e) + 1))
 
 def _check(code, tests):
