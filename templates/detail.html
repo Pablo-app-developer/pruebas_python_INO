@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>{{ c.name }}</title>
+<style>
+ body{font-family:system-ui,sans-serif;margin:24px;color:#222}
+ pre{background:#111;color:#ddd;padding:10px;min-height:120px;white-space:pre-wrap}
+ table{border-collapse:collapse}td{border:1px solid #ddd;padding:3px 8px;font-size:13px}
+ input[type=range]{width:100%}
+</style></head><body>
+<p><a href="/admin">← volver</a></p>
+<h2>{{ c.name }}</h2>
+<h3>Reproducción de lo escrito</h3>
+{% for q, list in snaps.items() %}
+<h4>{{ q }} <small id="lbl-{{ q }}"></small></h4>
+<input type="range" min="0" max="{{ list|length - 1 }}" value="{{ list|length - 1 }}" data-q="{{ q }}">
+<pre id="pre-{{ q }}"></pre>
+{% endfor %}
+<h3>Eventos</h3>
+<table>
+{% for e in timeline %}<tr><td>{{ e.t|ts }}</td><td>{{ e.q or '' }}</td><td><b>{{ e.type }}</b></td><td>{{ e.data }}</td></tr>{% endfor %}
+</table>
+<script>
+const snaps = {{ snaps|tojson }};
+function draw(q, i) {
+  const s = snaps[q][i];
+  document.getElementById('pre-' + q).textContent = s.code;
+  document.getElementById('lbl-' + q).textContent = `(${i + 1}/${snaps[q].length}, ${new Date(s.t * 1000).toLocaleTimeString()}, ${s.type}, ${s.code.length} car.)`;
+}
+document.querySelectorAll('input[type=range]').forEach(r => {
+  r.oninput = () => draw(r.dataset.q, +r.value);
+  draw(r.dataset.q, +r.value);
+});
+</script>
+</body></html>

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Admin pruebas</title>
+<style>
+ body{font-family:system-ui,sans-serif;margin:24px;color:#222}
+ table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:6px 8px;text-align:left;font-size:14px}
+ th{background:#f0f0f0}.hi{background:#fee2e2}.mid{background:#fef3c7}
+ code{background:#eee;padding:2px 4px}
+</style></head><body>
+<h2>Candidatos</h2>
+<form method="post" action="/admin/new"><input name="name" placeholder="Nombre del candidato" required> <button>Crear link</button></form><br>
+<table>
+<tr><th>Nombre</th><th>Link para el candidato</th><th>Inicio</th><th>Entregas</th><th>Pruebas OK</th><th>Pegados</th><th>Salidas de ventana</th><th>Sospecha</th><th>Señales</th></tr>
+{% for t, i in info.items() %}
+<tr class="{{ 'hi' if i.score>=60 else 'mid' if i.score>=30 else '' }}">
+ <td><a href="/admin/c/{{ t }}">{{ i.c.name }}</a></td>
+ <td><code>{{ base }}/t/{{ t }}</code></td>
+ <td>{{ i.c.started|ts }}</td>
+ <td>{{ i.s.submits }}</td><td>{{ i.s.passed }}/{{ i.s.total }}</td>
+ <td>{{ i.s.pastes }} ({{ i.s.pasted_chars }} car.)</td><td>{{ i.s.blurs }}</td>
+ <td><b>{{ i.score }}</b></td><td>{{ i.flags|join('; ') }}</td>
+</tr>
+{% endfor %}
+</table>
+<h3>Pares con código muy similar (≥90%, ignorando nombres de variables)</h3>
+{% for q,a,b,r in pairs %}<p>{{ q }}: {{ info[a].c.name }} ↔ {{ info[b].c.name }} — {{ (r*100)|int }}%</p>{% else %}<p>Ninguno.</p>{% endfor %}
+<p><small>Las señales son indicios, no pruebas.</small></p>
+</body></html>

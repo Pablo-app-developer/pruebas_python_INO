@@ -1,0 +1,5 @@
+pruebas.db
+links_candidatos.txt
+__pycache__/
+.vercel/
+.env*

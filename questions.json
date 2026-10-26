@@ -1,0 +1,72 @@
+{
+  "minutes": 45,
+  "questions": [
+    {
+      "id": "e1",
+      "title": "Ej. 1: Nombre y edad",
+      "variants": [
+        {
+          "statement": "Pida al usuario su nombre y su edad. Imprima exactamente:\n\nHola <nombre>, el año que viene tendrás <edad+1> años\n\nEjemplo: si el usuario escribe Luis y 25, el programa debe mostrar:\nHola Luis, el año que viene tendrás 26 años",
+          "tests": [
+            {"inputs": ["Ana", "30"], "check": "exact", "expected": ["Hola Ana, el año que viene tendrás 31 años"]},
+            {"inputs": ["Luis", "25"], "check": "exact", "expected": ["Hola Luis, el año que viene tendrás 26 años"]}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "e2",
+      "title": "Ej. 2: Contar números",
+      "variants": [
+        {
+          "statement": "Escriba un programa que haga lo siguiente:\n\n- Primero, pregunte cuántos números va a ingresar el usuario. Llamaremos n a esa cantidad.\n- Luego, pida esos n números, uno por uno (enteros, positivos o negativos).\n- Al terminar, imprima cuántos números se ingresaron en total, cuántos de ellos son pares y cuántos son negativos.\n\nEjemplo: si el usuario indica n = 3 e ingresa 7, -4 y 10, el programa debe mostrar:\ntotal 3, pares 2, negativos 1",
+          "tests": [
+            {"inputs": ["3", "7", "-4", "10"], "check": "ints", "expected": [3, 2, 1]},
+            {"inputs": ["6", "5", "4", "-3", "10", "7", "-2"], "check": "ints", "expected": [6, 3, 2]}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "e3",
+      "title": "Ej. 3: Área de un triángulo",
+      "variants": [
+        {
+          "statement": "Escriba una función area_triangulo(base, altura) que devuelva el área del triángulo.\n\nLuego pida al usuario la base y la altura, llame a la función e imprima el resultado.",
+          "tests": [
+            {"inputs": ["10", "5"], "check": "float", "expected": 25.0},
+            {"inputs": ["7", "3"], "check": "float", "expected": 10.5},
+            {"call": "area_triangulo", "inputs": ["10", "5"], "args": [10, 5], "expected": 25.0}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "e4",
+      "title": "Ej. 4: Números primos",
+      "variants": [
+        {
+          "statement": "Escriba una función es_primo(n) que devuelva True o False.\n\nÚsela para imprimir todos los números primos entre 1 y 50.\n\nEjemplo: es_primo(7) devuelve True y es_primo(8) devuelve False.",
+          "tests": [
+            {"inputs": [], "check": "ints", "expected": [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47]},
+            {"call": "es_primo", "inputs": [], "args": [7], "expected": true},
+            {"call": "es_primo", "inputs": [], "args": [8], "expected": false}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "e5",
+      "title": "Ej. 5: Razonamiento",
+      "variants": [
+        {
+          "statement": "Escriba un programa que pida un número n e imprima dos triángulos de asteriscos:\n\n- Primero, un triángulo de n filas que crece (la fila 1 tiene 1 asterisco, la fila 2 tiene 2, y así hasta n).\n- Debajo, el mismo triángulo invertido (n asteriscos en la primera fila, hasta llegar a 1).\n\nEjemplo con n = 3:\n*\n**\n***\n***\n**\n*",
+          "tests": [
+            {"inputs": ["3"], "check": "exact", "expected": ["*", "**", "***", "***", "**", "*"]},
+            {"inputs": ["4"], "check": "exact", "expected": ["*", "**", "***", "****", "****", "***", "**", "*"]}
+          ]
+        }
+      ]
+    }
+  ]
+}
