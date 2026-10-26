@@ -17,7 +17,10 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DB = os.environ.get("PRUEBAS_DB") or os.path.join(BASE, "pruebas.db")
-DATABASE_URL = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL")
+DATABASE_URL = next(
+    (os.environ[k] for k in ("DATABASE_URL", "POSTGRES_URL", "STORAGE_DATABASE_URL", "STORAGE_URL") if os.environ.get(k)),
+    None,
+)
 PG = bool(DATABASE_URL)
 IS_VERCEL = bool(os.environ.get("VERCEL"))
 # En Vercel la clave debe venir de la variable de entorno; en local se genera una al arrancar.
