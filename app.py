@@ -103,7 +103,7 @@ def ensure_ready():
         run("CREATE TABLE IF NOT EXISTS candidates(token TEXT PRIMARY KEY, name TEXT, variant INTEGER, "
             "created DOUBLE PRECISION, started DOUBLE PRECISION)", con=con)
         # pausa del reloj (también migra bases creadas antes de esta función)
-        for col in ("paused_at", "paused_total"):
+        for col in ("paused_at", "paused_total", "extra"):
             if PG:
                 run(f"ALTER TABLE candidates ADD COLUMN IF NOT EXISTS {col} DOUBLE PRECISION", con=con)
             elif col not in [r["name"] for r in run("PRAGMA table_info(candidates)", con=con).fetchall()]:
@@ -155,7 +155,7 @@ def get_candidate(token):
 def time_state(c, now=None):
     """Estado del reloj de un candidato: el tiempo en pausa no cuenta."""
     now = now or time.time()
-    total = CONFIG["minutes"] * 60
+    total = CONFIG["minutes"] * 60 + (c["extra"] or 0)
     if not c["started"]:
         return dict(state="sin_iniciar", remaining=total, raw=total)
     ref = c["paused_at"] or now
@@ -382,6 +382,20 @@ def admin_pause(token):
 @admin_required
 def admin_resume(token):
     _resume(token)
+    return redirect("/admin")
+
+
+@app.route("/admin/extra/<token>", methods=["POST"])
+@admin_required
+def admin_extra(token):
+    """Suma (o resta, si es negativo) minutos al tiempo de un candidato."""
+    try:
+        mins = max(-60, min(60, int(request.form["min"])))
+    except (KeyError, ValueError):
+        abort(400)
+    n = run("UPDATE candidates SET extra = COALESCE(extra, 0) + ? WHERE token=?", (mins * 60, token)).rowcount
+    if n:
+        log_event(token, "admin_extra", {"min": mins})
     return redirect("/admin")
 
 

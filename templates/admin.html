@@ -36,6 +36,10 @@
   {% elif tm.state == 'pausada' %}
    <form class="inline" method="post" action="/admin/resume/{{ t }}"><button>▶ Reanudar</button></form>
   {% endif %}
+  {% if tm.state != 'sin_iniciar' %}
+   <form class="inline" method="post" action="/admin/extra/{{ t }}"><input type="hidden" name="min" value="5"><button>+5</button></form>
+   <form class="inline" method="post" action="/admin/extra/{{ t }}"><input type="hidden" name="min" value="10"><button>+10</button></form>
+  {% endif %}
  </td>
  <td>{{ i.s.submits }}</td><td>{{ i.s.passed }}/{{ i.s.total }}</td>
  <td>{{ i.s.pastes }} ({{ i.s.pasted_chars }} car.)</td>
