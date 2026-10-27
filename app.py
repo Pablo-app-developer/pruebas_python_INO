@@ -258,9 +258,8 @@ def analyze():
     info, finals = {}, {}
     for c in cands:
         evs = run("SELECT * FROM events WHERE token=? ORDER BY id", (c["token"],)).fetchall()
-        s = dict(pastes=0, pasted_chars=0, blurs=0, away=0, copies=0, submits=0, passed=0, total=0, evs=len(evs))
+        s = dict(pastes=0, pasted_chars=0, blurs=0,copies=0, submits=0, passed=0, total=0, evs=len(evs))
         last = {}
-        last_blur = None
         for e in evs:
             d = json.loads(e["data"])
             if e["type"] == "paste":
@@ -268,12 +267,6 @@ def analyze():
                 s["pasted_chars"] += d.get("len", 0)
             elif e["type"] == "blur":
                 s["blurs"] += 1
-                last_blur = e["t"]
-            elif e["type"] == "focus":
-                # tiempo fuera = desde que salió (blur) hasta que volvió (focus)
-                if last_blur is not None:
-                    s["away"] += max(0, e["t"] - last_blur)
-                    last_blur = None
             elif e["type"] in ("copy", "cut"):
                 s["copies"] += 1
             elif e["type"] == "submit":

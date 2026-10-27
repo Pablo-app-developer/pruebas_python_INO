@@ -46,7 +46,7 @@
  </td>
  <td>{{ i.s.submits }}</td><td>{{ i.s.passed }}/{{ i.s.total }}</td>
  <td>{{ i.s.pastes }} ({{ i.s.pasted_chars }} car.)</td>
- <td>{{ i.s.blurs }} ({{ '%d:%02d'|format((i.s.away|int)//60, (i.s.away|int)%60) }} fuera)</td>
+ <td>{{ i.s.blurs }}</td>
  <td><b>{{ i.score }}</b></td><td><form method="post" action="/admin/delete/{{ t }}" onsubmit="return confirm('Eliminar a {{ i.c.name|e }} y todos sus datos?')"><button>Eliminar</button></form></td>
 </tr>
 {% endfor %}
