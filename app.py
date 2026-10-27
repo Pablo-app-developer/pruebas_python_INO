@@ -406,7 +406,7 @@ def admin_reopen(token):
     mins = max(1, min(60, int(request.form.get("min", 5))))
     c = get_candidate(token)
     if c["started"]:
-        extra = (c["extra"] or 0) + mins * 60 - max(0, time_state(c)["raw"])
+        extra = (c["extra"] or 0) + mins * 60 - time_state(c)["raw"]
         run("UPDATE candidates SET extra=? WHERE token=?", (extra, token))
         log_event(token, "admin_reopen", {"min": mins})
     return redirect("/admin")
