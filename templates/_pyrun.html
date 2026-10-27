@@ -1,0 +1,116 @@
+const PYRUN = `
+import json, io, re, sys, contextlib, traceback
+
+class _NeedInput(BaseException):
+    pass
+
+class _TooMuch(BaseException):
+    pass
+
+class _Out(io.StringIO):
+    stop = False
+    n = 0
+    def write(self, s):
+        # tras pedir un dato que aun no existe, cualquier print corta el programa
+        # (un except: sin tipo no puede dejarlo seguir en bucle)
+        if self.stop:
+            raise _NeedInput()
+        self.n += len(s)
+        if self.n > 100000:
+            raise _TooMuch()
+        return super().write(s)
+
+def _fmt(e):
+    s = "Traceback (most recent call last):\\n"
+    fr = [f for f in traceback.extract_tb(e.__traceback__) if f.filename == "programa.py"]
+    if len(fr) > 6:
+        fr = fr[:3] + [None] + fr[-3:]
+    for f in fr:
+        if f is None:
+            s += "  ... (se repite) ..." + "\\n"
+        else:
+            s += '  File "programa.py", line %s, in %s\\n' % (f.lineno, f.name)
+    if isinstance(e, SyntaxError):
+        s += '  File "programa.py", line %s\\n    %s\\n' % (e.lineno, (e.text or "").strip())
+    return s + "%s: %s\\n" % (type(e).__name__, e)
+
+def _exec(code, inputs, quiet):
+    ns = {"__name__": "__main__"}
+    out = _Out()
+    idx = [0]
+    def fake_input(prompt=""):
+        if not quiet:
+            out.write(str(prompt))
+        if idx[0] >= len(inputs):
+            out.stop = True
+            raise _NeedInput()
+        v = inputs[idx[0]]; idx[0] += 1
+        if not quiet:
+            out.write(v + "\\n")
+        return v
+    ns["input"] = fake_input
+    class _Stdin:
+        # sys.stdin.readline() / for line in sys.stdin leen de los mismos datos que input()
+        def readline(self, *a):
+            return fake_input("") + "\\n"
+        def __iter__(self):
+            return self
+        def __next__(self):
+            return fake_input("") + "\\n"
+    old_stdin = sys.stdin
+    sys.stdin = _Stdin()
+    status, err = "done", ""
+    try:
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+            exec(compile(code, "programa.py", "exec"), ns)
+    except _NeedInput:
+        pass
+    except SystemExit:
+        pass
+    except _TooMuch:
+        status, err = "error", "Salida demasiado larga (limite de 100000 caracteres)\\n"
+    except BaseException as e:
+        status, err = "error", _fmt(e)
+    finally:
+        sys.stdin = old_stdin
+    if out.stop:
+        status, err = "need_input", ""
+    return out.getvalue(), status, err, ns
+
+def _interactive(code, inputs):
+    out, status, err, _ = _exec(code, json.loads(inputs), False)
+    return json.dumps({"out": out, "status": status, "err": err})
+
+def _nums(s):
+    return [float(x.replace(",", ".")) for x in re.findall(r"-?\\d+(?:[.,]\\d+)?", s)]
+
+def _cmp(out, check, exp):
+    if check == "exact":
+        got = [l.rstrip() for l in out.splitlines() if l.strip()]
+        return any(got[i:i + len(exp)] == exp for i in range(len(got) - len(exp) + 1))
+    n = _nums(out)
+    if check == "float":
+        return any(abs(x - exp) < 1e-6 for x in n)
+    e = [float(x) for x in exp]
+    if check == "ints_all":
+        return n == e
+    if check == "ints_end":
+        return n[-len(e):] == e
+    return any(n[i:i + len(e)] == e for i in range(len(n) - len(e) + 1))
+
+def _check(code, tests):
+    res = []
+    for t in json.loads(tests):
+        out, status, err, ns = _exec(code, t.get("inputs", []), True)
+        if "call" in t:
+            f = ns.get(t["call"])
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    ok = callable(f) and f(*t["args"]) == t["expected"]
+            except BaseException:
+                ok = False
+        else:
+            ok = status == "done" and _cmp(out, t["check"], t["expected"])
+        res.append(bool(ok))
+    return json.dumps(res)
+`;

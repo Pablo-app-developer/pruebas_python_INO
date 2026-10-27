@@ -18,6 +18,7 @@
  .ok{color:#15803d}.no{color:#b91c1c}.gris{color:#777}
  @media print{a.volver{display:none}}
 </style></head><body>
+{% if pendientes %}<p id="calif" class="card">Calificando {{ pendientes|length }} ejercicio(s) con código guardado sin entregar… la página se recargará sola.</p>{% endif %}
 <a class="volver" href="/admin">← volver al panel</a>
 <h2>Resultados finales</h2>
 <p class="gris">Pruebas = pruebas automáticas aprobadas en la última entrega de cada ejercicio. Sospecha = pegados (10 por pegado + 1 por cada 50 caracteres) + salidas de pantalla (3 por salida, tope 30), máximo 100.</p>
@@ -31,7 +32,7 @@
   <div class="kpi"><small>Sospecha alta / media</small><b>{{ resumen.alta }} / {{ resumen.media }}</b></div>
  </div>
  <table>
-  <tr><th>#</th><th>Candidato</th><th>Nota (0 a 5)</th><th>Pruebas aprobadas</th><th>Ejercicios entregados</th><th>Sospecha</th></tr>
+  <tr><th>#</th><th>Candidato</th><th>Nota (0 a 5)</th><th>Pruebas aprobadas</th><th>Ejercicios resueltos</th><th>Sospecha</th></tr>
   {% for t, i in ranking %}
   <tr class="{{ i.nivel }}">
    <td>{{ loop.index }}</td>
@@ -43,7 +44,7 @@
   </tr>
   {% endfor %}
  </table>
- <p class="gris">Nota = 5 × pruebas aprobadas ÷ total de pruebas del examen. Un ejercicio sin entregar suma 0.</p>
+ <p class="gris">Nota = 5 × pruebas aprobadas ÷ total de pruebas del examen. Si un ejercicio no se entregó pero tenía código guardado, se califica con ese código; si no hay código, suma 0.</p>
 </div>
 
 <div class="card">
@@ -58,7 +59,7 @@
 {% for t, i in info.items() %}
 <tr class="{{ 'alta' if i.score >= 60 else 'media' if i.score >= 30 else 'baja' }}">
  <td><a href="/admin/c/{{ t }}">{{ i.c.name }}</a></td>
- <td>{{ i.s.passed }}/{{ i.s.total }}</td>
+ <td>{{ i.ok }}/{{ total_ref }}</td>
  <td>{{ i.s.pastes }}</td><td>{{ i.s.pasted_chars }}</td>
  <td>{{ i.s.blurs }}</td>
  <td><b>{{ i.score }}</b></td>
@@ -85,7 +86,7 @@
    <td>{{ titulo }}</td>
    <td>{% if r.codigo %}<span class="ok">sí</span>{% else %}<span class="gris">sin respuesta</span>{% endif %}</td>
    <td>{% if r.entregada %}<span class="ok">sí</span>{% else %}<span class="gris">no</span>{% endif %}</td>
-   <td>{% if r.entregada %}{{ r.passed }}/{{ r.total }}{% else %}<span class="gris">-</span>{% endif %}</td>
+   <td>{% if r.entregada %}{{ r.passed }}/{{ r.total }}{% elif r.auto %}{{ r.passed }}/{{ r.total }} <span class="gris">(código guardado)</span>{% else %}<span class="gris">-</span>{% endif %}</td>
    <td>{{ r.ejecuciones }}</td>
    <td>{% if r.pegados %}<span class="no">{{ r.pegados }}</span>{% else %}0{% endif %}</td>
    <td>{{ r.chars }}</td>
@@ -96,4 +97,42 @@
  <p class="gris">{{ i.flags|join(' · ') if i.flags else 'Sin señales.' }}</p>
 </div>
 {% endfor %}
+{% if pendientes %}
+<script>
+{% include '_pyrun.html' %}
+const PY_CDN = 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/';
+const PENDIENTES = {{ pendientes|tojson }};
+const WORKER_SRC = `
+importScripts('${PY_CDN}pyodide.js');
+const ready = loadPyodide({indexURL: '${PY_CDN}'}).then(py => { py.runPython(${JSON.stringify(PYRUN)}); return py; });
+onmessage = async e => {
+  const py = await ready;
+  py.globals.set('_a', e.data.code); py.globals.set('_b', JSON.stringify(e.data.tests));
+  try { postMessage({r: py.runPython('_check(_a,_b)')}); } catch (err) { postMessage({error: String(err)}); }
+};`;
+
+// Un worker por ejercicio: si el código tiene un bucle infinito se mata a los 20 s y cuenta como 0.
+function corregir(p) {
+  return new Promise(resolve => {
+    const w = new Worker(URL.createObjectURL(new Blob([WORKER_SRC], {type: 'text/javascript'})));
+    const fin = r => { clearTimeout(t); w.terminate(); resolve(r); };
+    const t = setTimeout(() => fin(null), 60000);
+    w.onmessage = e => fin(e.data.r ? JSON.parse(e.data.r) : null);
+    w.onerror = () => fin(null);
+    w.postMessage({code: p.code, tests: p.tests});
+  });
+}
+
+(async () => {
+  const out = [];
+  for (const p of PENDIENTES) {
+    const arr = await corregir(p);
+    out.push({token: p.token, q: p.q, code: p.code,
+              passed: arr ? arr.filter(Boolean).length : 0, total: p.tests.length});
+  }
+  await fetch('/admin/autograde', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(out)});
+  location.reload();
+})().catch(() => { document.getElementById('calif').textContent = 'No se pudo calificar el código guardado; recarga la página para reintentar.'; });
+</script>
+{% endif %}
 </body></html>

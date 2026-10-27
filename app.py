@@ -317,7 +317,8 @@ def admin_resultados():
     orden = [(q["id"], q["title"]) for q in CONFIG["questions"]]
     detalle = {}
     for token in info:
-        rows = {qid: dict(codigo=False, entregada=False, passed=0, total=0, pegados=0, chars=0, salidas=0, ejecuciones=0)
+        rows = {qid: dict(codigo=False, entregada=False, passed=0, total=0, pegados=0, chars=0, salidas=0, ejecuciones=0,
+                          actual="", auto=False, auto_code=None, auto_passed=0, auto_total=0)
                 for qid, _ in orden}
         for e in run("SELECT q, type, data FROM events WHERE token=? ORDER BY id", (token,)).fetchall():
             r = rows.get(e["q"])
@@ -325,9 +326,12 @@ def admin_resultados():
                 continue
             d = json.loads(e["data"])
             if e["type"] in ("snap", "submit"):
-                r["codigo"] = bool((d.get("code") or "").replace(PLACEHOLDER, "").strip())
+                r["actual"] = d.get("code") or ""
+                r["codigo"] = bool(r["actual"].replace(PLACEHOLDER, "").strip())
             if e["type"] == "submit":
                 r["entregada"], r["passed"], r["total"] = True, d.get("passed", 0), d.get("total", 0)
+            elif e["type"] == "autograde":
+                r["auto_code"], r["auto_passed"], r["auto_total"] = d.get("code"), d.get("passed", 0), d.get("total", 0)
             elif e["type"] == "paste":
                 r["pegados"] += 1
                 r["chars"] += d.get("len", 0)
@@ -337,18 +341,33 @@ def admin_resultados():
                 r["ejecuciones"] += 1
         detalle[token] = rows
 
+    # ejercicios con código pero sin entregar: se califican con el último código guardado.
+    # La corrección corre en el navegador del admin (Pyodide) y el resultado queda guardado como evento.
+    pruebas = {q["id"]: q["variants"] for q in CONFIG["questions"]}
+    pendientes = []
+    for token, i in info.items():
+        for qid, _ in orden:
+            r = detalle[token][qid]
+            if r["entregada"] or not r["codigo"]:
+                continue
+            if r["auto_code"] == r["actual"]:
+                r["auto"], r["passed"], r["total"] = True, r["auto_passed"], r["auto_total"]
+            else:
+                v = pruebas[qid][i["c"]["variant"] % len(pruebas[qid])]
+                pendientes.append(dict(token=token, q=qid, code=r["actual"], tests=v["tests"]))
+
     # calificación: pruebas aprobadas sobre el total de pruebas del examen, en escala 0 a 5.
-    # El total por ejercicio es el mayor visto en las entregas (un ejercicio sin entregar cuenta como 0).
-    ref = {qid: max([detalle[t][qid]["total"] for t in detalle] or [0]) for qid, _ in orden}
+    # El total por ejercicio sale de las pruebas de la configuración (un ejercicio sin resolver cuenta como 0).
+    ref = {q["id"]: max(len(v["tests"]) for v in q["variants"]) for q in CONFIG["questions"]}
     total_ref = sum(ref.values())
     for token, i in info.items():
         ok = sum(detalle[token][qid]["passed"] for qid, _ in orden)
-        entregados = sum(1 for qid, _ in orden if detalle[token][qid]["entregada"])
+        entregados = sum(1 for qid, _ in orden if detalle[token][qid]["entregada"] or detalle[token][qid]["auto"])
         i["nota"] = round(5 * ok / total_ref, 1) if total_ref else 0.0
         i["ok"], i["entregados"] = ok, entregados
         i["nivel"] = "alta" if i["score"] >= 60 else "media" if i["score"] >= 30 else "baja"
         i["informe"] = (
-            f"Aprobó {ok} de {total_ref} pruebas y entregó {entregados} de {len(orden)} ejercicios, "
+            f"Aprobó {ok} de {total_ref} pruebas y resolvió {entregados} de {len(orden)} ejercicios (entregados o con código guardado), "
             f"con nota {i['nota']:.1f}/5. Sospecha {i['nivel']} ({i['score']}/100): "
             + (" · ".join(i["flags"]) if i["flags"] else "sin pegados ni salidas de pantalla")
             + "."
@@ -363,7 +382,21 @@ def admin_resultados():
         media=sum(1 for i in info.values() if i["nivel"] == "media"),
     )
     return render_template("resultados.html", info=info, detalle=detalle, orden=orden,
-                           ranking=ranking, resumen=resumen, total_ref=total_ref)
+                           ranking=ranking, resumen=resumen, total_ref=total_ref, pendientes=pendientes)
+
+
+@app.route("/admin/autograde", methods=["POST"])
+@admin_required
+def admin_autograde():
+    """Guarda la nota calculada en el navegador para el código guardado sin entregar."""
+    rows = []
+    for g_ in request.get_json(force=True):
+        if not run("SELECT 1 FROM candidates WHERE token=?", (g_["token"],)).fetchone():
+            continue
+        data = dict(code=g_["code"], passed=int(g_["passed"]), total=int(g_["total"]))
+        rows.append((g_["token"], g_["q"], "autograde", json.dumps(data), time.time()))
+    run_many("INSERT INTO events(token,q,type,data,t) VALUES(?,?,?,?,?)", rows)
+    return jsonify(ok=True, n=len(rows))
 
 
 @app.route("/admin/new", methods=["POST"])
