@@ -22,6 +22,37 @@
 <h2>Resultados finales</h2>
 <p class="gris">Pruebas = pruebas automáticas aprobadas en la última entrega de cada ejercicio. Sospecha = pegados (10 por pegado + 1 por cada 50 caracteres) + salidas de pantalla (3 por salida, tope 30), máximo 100.</p>
 
+<div class="card">
+ <h3>Evaluación general</h3>
+ <div class="kpis">
+  <div class="kpi"><small>Candidatos</small><b>{{ resumen.candidatos }}</b></div>
+  <div class="kpi"><small>Nota promedio</small><b>{{ '%.1f'|format(resumen.promedio) }}/5</b></div>
+  <div class="kpi"><small>Mejor nota</small><b>{{ resumen.mejor }}</b></div>
+  <div class="kpi"><small>Sospecha alta / media</small><b>{{ resumen.alta }} / {{ resumen.media }}</b></div>
+ </div>
+ <table>
+  <tr><th>#</th><th>Candidato</th><th>Nota (0 a 5)</th><th>Pruebas aprobadas</th><th>Ejercicios entregados</th><th>Sospecha</th></tr>
+  {% for t, i in ranking %}
+  <tr class="{{ i.nivel }}">
+   <td>{{ loop.index }}</td>
+   <td><a href="/admin/c/{{ t }}">{{ i.c.name }}</a></td>
+   <td><b>{{ '%.1f'|format(i.nota) }}</b></td>
+   <td>{{ i.ok }}/{{ total_ref }}</td>
+   <td>{{ i.entregados }}/{{ orden|length }}</td>
+   <td>{{ i.score }}</td>
+  </tr>
+  {% endfor %}
+ </table>
+ <p class="gris">Nota = 5 × pruebas aprobadas ÷ total de pruebas del examen. Un ejercicio sin entregar suma 0.</p>
+</div>
+
+<div class="card">
+ <h3>Informe final</h3>
+ {% for t, i in ranking %}
+ <p><b>{{ i.c.name }}</b>: {{ i.informe }}</p>
+ {% endfor %}
+</div>
+
 <table>
 <tr><th>Candidato</th><th>Pruebas</th><th>Pegados</th><th>Caracteres pegados</th><th>Salidas de pantalla</th><th>Sospecha</th></tr>
 {% for t, i in info.items() %}
@@ -41,6 +72,7 @@
  <div class="kpis">
   <div class="kpi"><small>Inicio</small><b>{{ i.c.started|ts }}</b></div>
   <div class="kpi"><small>Tiempo restante</small><b>{{ '%02d:%02d'|format((i.time.remaining|int)//60, (i.time.remaining|int)%60) }}</b></div>
+  <div class="kpi"><small>Nota</small><b>{{ '%.1f'|format(i.nota) }}/5</b></div>
   <div class="kpi"><small>Pegados</small><b>{{ i.s.pastes }} ({{ i.s.pasted_chars }} car.)</b></div>
   <div class="kpi"><small>Salidas de pantalla</small><b>{{ i.s.blurs }}</b></div>
   <div class="kpi {{ 'alta' if i.score >= 60 else 'media' if i.score >= 30 else 'baja' }}"><small>Sospecha</small><b>{{ i.score }}</b></div>

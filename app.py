@@ -336,7 +336,34 @@ def admin_resultados():
             elif e["type"] == "run":
                 r["ejecuciones"] += 1
         detalle[token] = rows
-    return render_template("resultados.html", info=info, detalle=detalle, orden=orden)
+
+    # calificación: pruebas aprobadas sobre el total de pruebas del examen, en escala 0 a 5.
+    # El total por ejercicio es el mayor visto en las entregas (un ejercicio sin entregar cuenta como 0).
+    ref = {qid: max([detalle[t][qid]["total"] for t in detalle] or [0]) for qid, _ in orden}
+    total_ref = sum(ref.values())
+    for token, i in info.items():
+        ok = sum(detalle[token][qid]["passed"] for qid, _ in orden)
+        entregados = sum(1 for qid, _ in orden if detalle[token][qid]["entregada"])
+        i["nota"] = round(5 * ok / total_ref, 1) if total_ref else 0.0
+        i["ok"], i["entregados"] = ok, entregados
+        i["nivel"] = "alta" if i["score"] >= 60 else "media" if i["score"] >= 30 else "baja"
+        i["informe"] = (
+            f"Aprobó {ok} de {total_ref} pruebas y entregó {entregados} de {len(orden)} ejercicios, "
+            f"con nota {i['nota']:.1f}/5. Sospecha {i['nivel']} ({i['score']}/100): "
+            + (" · ".join(i["flags"]) if i["flags"] else "sin pegados ni salidas de pantalla")
+            + "."
+        )
+    ranking = sorted(info.items(), key=lambda kv: (-kv[1]["nota"], kv[1]["score"]))
+    notas = [i["nota"] for i in info.values()]
+    resumen = dict(
+        candidatos=len(info),
+        promedio=round(sum(notas) / len(notas), 1) if notas else 0.0,
+        mejor=ranking[0][1]["c"]["name"] if ranking else "-",
+        alta=sum(1 for i in info.values() if i["nivel"] == "alta"),
+        media=sum(1 for i in info.values() if i["nivel"] == "media"),
+    )
+    return render_template("resultados.html", info=info, detalle=detalle, orden=orden,
+                           ranking=ranking, resumen=resumen, total_ref=total_ref)
 
 
 @app.route("/admin/new", methods=["POST"])
