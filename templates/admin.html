@@ -36,7 +36,10 @@
   {% elif tm.state == 'pausada' %}
    <form class="inline" method="post" action="/admin/resume/{{ t }}"><button>▶ Reanudar</button></form>
   {% endif %}
-  {% if tm.state != 'sin_iniciar' %}
+  {% if tm.state == 'terminada' %}
+   <form class="inline" method="post" action="/admin/reopen/{{ t }}" onsubmit="return confirm('¿Reabrir la prueba de {{ i.c.name|e }}?')"><input type="hidden" name="min" value="5"><button>🔓 Reabrir 5 min</button></form>
+   <form class="inline" method="post" action="/admin/reopen/{{ t }}" onsubmit="return confirm('¿Reabrir la prueba de {{ i.c.name|e }}?')"><input type="hidden" name="min" value="10"><button>🔓 10 min</button></form>
+  {% elif tm.state != 'sin_iniciar' %}
    <form class="inline" method="post" action="/admin/extra/{{ t }}"><input type="hidden" name="min" value="5"><button>+5</button></form>
    <form class="inline" method="post" action="/admin/extra/{{ t }}"><input type="hidden" name="min" value="10"><button>+10</button></form>
   {% endif %}

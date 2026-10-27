@@ -399,6 +399,19 @@ def admin_extra(token):
     return redirect("/admin")
 
 
+@app.route("/admin/reopen/<token>", methods=["POST"])
+@admin_required
+def admin_reopen(token):
+    """Reabre una prueba terminada dejándole exactamente `min` minutos."""
+    mins = max(1, min(60, int(request.form.get("min", 5))))
+    c = get_candidate(token)
+    if c["started"]:
+        extra = (c["extra"] or 0) + mins * 60 - max(0, time_state(c)["raw"])
+        run("UPDATE candidates SET extra=? WHERE token=?", (extra, token))
+        log_event(token, "admin_reopen", {"min": mins})
+    return redirect("/admin")
+
+
 @app.route("/admin/pause_all", methods=["POST"])
 @admin_required
 def admin_pause_all():

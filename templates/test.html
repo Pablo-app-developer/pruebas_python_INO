@@ -438,6 +438,7 @@ async function pollState() {
   try {
     const s = await (await fetch('/api/state/' + token)).json();
     endAt = Date.now() + s.remaining * 1000; remPaused = s.remaining;
+    if (expired && s.remaining > 0) { expired = false; ta.disabled = paused; tin.disabled = paused; setBusy(busy); }  // reabierta
     setPaused(s.paused);
   } catch (e) { /* sin red: se conserva el último estado */ }
 }
